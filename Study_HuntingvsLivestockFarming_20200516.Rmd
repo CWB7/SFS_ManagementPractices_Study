@@ -1,0 +1,794 @@
+---
+title: "HuntingvsLivestockFarming_20200516"
+author: "CWBrink_list"
+date: "16/05/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Supplementary Feeding Site Managers: Livestock farming versus hunting operations
+
+This document shows the analysis associated with the paper titled "Perceptions of vulture supplementary feeding site managers and potential hidden risks to avian scavengers", published in Conservation Science and Practice in 2020. The analysis explores data from a questionnaire survey with vulture supplementary feeding site (SFS) managers to determine the extent of problematic management practices that may endanger vultures. It is advisable to read the results of the paper to give context to the code provided below.
+
+The raw data associated with the analysis can unfortunately not be shared at this time.
+
+This analysis compares vulture supplementary feeding site (SFS) managers who rely on livestock farmer as opposed to hunting opperations in terms of their overall and individual knowledge of threats to vultures and their percieved benefits and disadvantages to managing a SFs.
+
+```{r package installation, echo= FALSE, warning=FALSE, message=FALSE, include=TRUE, results='hide'}
+
+rm(list=ls())
+
+library (tidyverse)
+library(ggplot2)
+library (dplyr)
+library(tidyr)
+library(DHARMa)
+library(car)
+library(emmeans)
+library(effects)
+library(MASS)
+library(rcompanion)
+library(readr)
+
+getwd()
+Chpt1B_Data<- read_delim("VRResponses_FINAL_Rworksheet_20191021_CheckedRefined_ActiveSiteCatAdjusted.csv", 
+                         ";", escape_double = FALSE, trim_ws = TRUE)
+
+Raw_Data <- as_tibble(Chpt1B_Data)
+
+Data <- Raw_Data %>%
+  dplyr::select(., -Number, -Date_Interviewed, -Method, -Time_Start,
+               -Time_End, -Language_Survey, -Name_Respondent)%>%
+  as_tibble(.)
+
+Data <- as_tibble(Data)
+options("na.action")
+
+```
+
+```{r Subset to only Active}
+#Need to subset only active SFS in SA - questions such as best practices are only relevent to currely active SFS.
+
+Active_SFS <- Data %>%
+  filter(., Status_Category == "Active", Country == "South Africa")
+
+
+Active_SFS <- Active_SFS %>% mutate(., Catagory_Activity = 
+                                      ifelse(MainActiv_LivestockfarmSUM == 1 & MainActiv_Hunting == 0, "Livestock", 
+                                             ifelse(MainActiv_LivestockfarmSUM == 0 & MainActiv_Hunting == 1, "Hunting", 
+                                                    ifelse(MainActiv_LivestockfarmSUM == 1 & MainActiv_Hunting == 1, "Combined", "NA"))))
+
+Comparison_L_H <- subset(Active_SFS, Catagory_Activity == "Livestock" | Catagory_Activity == "Hunting") 
+
+Comparison_L_H$Catagory_Activity <- factor(Comparison_L_H$Catagory_Activity, levels = c("Livestock", "Hunting"))
+
+Comparison_L_H <- Comparison_L_H %>% mutate(., Catagory_Activity_Binary =
+                                              as.numeric(ifelse(Catagory_Activity == "Livestock", "0", "1")))
+
+Hunting_test <- subset(Comparison_L_H, Catagory_Activity == "Hunting")
+
+Livestock_test <- subset(Comparison_L_H, Catagory_Activity == "Livestock")
+
+```
+
+# Number of Threats
+
+```{r}
+
+boxplot(Comparison_L_H$Threats_TotalRelaventMentioned~Comparison_L_H$Catagory_Activity, ylab = "Number of relevent threats")
+
+plot(Comparison_L_H$Total_kg_y, Comparison_L_H$Threats_TotalRelaventMentioned)
+
+hist(Comparison_L_H$Total_kg_y)
+hist(Active_SFS$Total_kg_y)
+hist(Active_SFS$Threats_TotalRelaventMentioned)
+hist(Comparison_L_H$Threats_TotalRelaventMentioned)
+
+```
+
+# Number of Threats Comparison
+
+```{r}
+
+#Livestock vs Hunting
+Comparison.m1 <- glm(Comparison_L_H$Threats_TotalRelaventMentioned~Comparison_L_H$Catagory_Activity)
+summary(Comparison.m1)
+
+Comparison.Poison <- glm(Comparison_L_H$Threats_TotalRelaventMentioned~Comparison_L_H$Catagory_Activity, family = poisson)
+summary(Comparison.Poison)
+
+Comparison.Q <- glm(Comparison_L_H$Threats_TotalRelaventMentioned~Comparison_L_H$Catagory_Activity, family = quasipoisson)
+summary(Comparison.Q)
+
+par(mfrow=c(2,2))
+plot(Comparison.m1)
+
+#Prov Rate
+
+ComparisonProvR <- glm(Comparison_L_H$Threats_TotalRelaventMentioned~Comparison_L_H$Total_kg_y, family = quasipoisson)
+summary(ComparisonProvR)
+
+```
+
+
+#Comparison of each seperate threat
+
+```{r Powerlines}
+
+#Powerlines
+
+T_Powerlines_glm2 <- glm(Threats_Powerlines~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_Powerlines_glm2)
+T_Powerlines_fit2 <-simulateResiduals(T_Powerlines_glm2, n=250, refit = F)
+plot(T_Powerlines_fit2)
+confint(T_Powerlines_glm2)
+confint.glm(T_Powerlines_glm2)
+T_Powerlines_glm2$coefficients[2]+qt(0.025, 69)*0.5441  ; T_Powerlines_glm2$coefficients[2]+qt(0.975, 69)*0.5441
+emmeans(T_Powerlines_glm2)
+
+T_Powerlines_glm2_emmeans <- emmeans(T_Powerlines_glm2, ~ Catagory_Activity)
+T_Powerlines_glm2_emmeans
+summary(T_Powerlines_glm2_emmeans, type = "response")
+
+table(Livestock_test$Threats_Powerlines) # No 18 ; Yes 34
+table(Hunting_test$Threats_Powerlines)   # No 9 ; Yes 10
+
+```
+
+```{r Belief-based use}
+
+#Belief-based use
+
+T_BeliefB_glm2 <- glm(Threats_Muthi ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_BeliefB_glm2)
+T_BeliefB_fit2 <-simulateResiduals(T_BeliefB_glm2, n=250, refit = F)
+plot(T_BeliefB_fit2)
+confint(T_BeliefB_glm2)
+emmeans(T_BeliefB_glm2)
+
+T_BeliefB_glm2_emmeans <- emmeans(T_BeliefB_glm2, ~ Catagory_Activity)
+T_BeliefB_glm2_emmeans
+summary(T_BeliefB_glm2_emmeans, type = "response")
+
+
+table(Livestock_test$Threats_Muthi) # No 26 ; Yes 26
+table(Hunting_test$Threats_Muthi)   # No 12 ; Yes 7
+
+```
+
+```{r Unintentional poisoning}
+
+#Unintentional poisoning
+
+T_UnintPoisoning_glm2 <- glm(Threats_SUMPoisonUnintentional ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_UnintPoisoning_glm2)
+T_UnintPoisoning_fit2 <-simulateResiduals(T_UnintPoisoning_glm2, n=250, refit = F)
+plot(T_UnintPoisoning_fit2)
+confint(T_UnintPoisoning_glm2)
+
+T_UnintPoisoning_glm2_emmeans <- emmeans(T_UnintPoisoning_glm2, ~ Catagory_Activity)
+T_UnintPoisoning_glm2_emmeans
+summary(T_UnintPoisoning_glm2_emmeans, type = "response")
+
+table(Livestock_test$Threats_SUMPoisonUnintentional) # No 26 ; Yes 26
+table(Hunting_test$Threats_SUMPoisonUnintentional)   # No 13 ; Yes 6
+
+```
+
+```{r Intentional poisoning}
+
+#Intentional poisoning
+
+T_IntPoisoning_glm2 <- glm(Threats_SUMPoisonIntentional~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_IntPoisoning_glm2)
+T_IntPoisoning_fit2 <-simulateResiduals(T_IntPoisoning_glm2, n=250, refit = F)
+plot(T_IntPoisoning_fit2)
+confint(T_IntPoisoning_glm2)
+
+T_IntPoisoning_glm2_emmeans <- emmeans(T_IntPoisoning_glm2, ~ Catagory_Activity)
+T_IntPoisoning_glm2_emmeans
+summary(T_IntPoisoning_glm2_emmeans, type = "response")
+
+table(Livestock_test$Threats_SUMPoisonIntentional) # No 40 ; Yes 12
+table(Hunting_test$Threats_SUMPoisonIntentional)   # No 17 ; Yes 2
+
+```
+
+```{r Verterinary drugs}
+
+#Verterinary drugs
+
+T_VetD_glm2 <- glm(Threats_VeterinaryDrugs~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_VetD_glm2)
+T_VetD_fit2 <-simulateResiduals(T_VetD_glm2, n=250, refit = F)
+plot(T_VetD_fit2)
+confint(T_VetD_glm2)
+
+T_VetD_glm2_emmeans <- emmeans(T_VetD_glm2, ~ Catagory_Activity)
+T_VetD_glm2_emmeans
+summary(T_VetD_glm2_emmeans, type = "response")
+
+table(Livestock_test$Threats_VeterinaryDrugs) # No 40 ; Yes 12
+table(Hunting_test$Threats_VeterinaryDrugs)   # No 17 ; Yes 2
+
+```
+
+```{r Habitat loss/ degredation}
+
+#Habitat loss/ degredation
+
+T_HabitatLoss_glm2 <- glm(Threats_HabitatLossDegredation ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_HabitatLoss_glm2)
+T_HabitatLoss_fit2 <-simulateResiduals(T_HabitatLoss_glm2, n=250, refit = F)
+plot(T_HabitatLoss_fit2)
+T_HabitatLoss_glm2_fit <- emmeans(T_HabitatLoss_glm2, ~ Catagory_Activity)
+T_HabitatLoss_glm2_fit_sum <- summary(T_HabitatLoss_glm2_fit, type = "response")
+print(T_HabitatLoss_glm2_fit_sum)
+
+plogis(confint(T_HabitatLoss_glm2)) #transform from log scale to probability scale?
+
+T_HabitatLoss_glm2_emmeans <- emmeans(T_HabitatLoss_glm2, ~ Catagory_Activity)
+T_HabitatLoss_glm2_emmeans
+summary(T_HabitatLoss_glm2_emmeans, type = "response")
+
+
+table(Livestock_test$Threats_HabitatLossDegredation) # No 47 ; Yes 5
+table(Hunting_test$Threats_HabitatLossDegredation)   # No 14 ; Yes 5
+
+```
+
+```{r Food availibility}
+
+#Food availibility
+
+T_FoodAvail_glm2 <- glm(Threats_FoodAvailability ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_FoodAvail_glm2)
+T_FoodAvail_fit2 <-simulateResiduals(T_FoodAvail_glm2, n=250, refit = F)
+plot(T_FoodAvail_fit2)
+confint(T_FoodAvail_glm2)
+
+T_FoodAvail_glm2_emmeans <- emmeans(T_FoodAvail_glm2, ~ Catagory_Activity)
+T_FoodAvail_glm2_emmeans
+summary(T_FoodAvail_glm2_emmeans, type = "response")
+
+
+table(Livestock_test$Threats_FoodAvailability) # No 44 ; Yes 8
+table(Hunting_test$Threats_FoodAvailability)   # No 19 ; Yes 0
+
+```
+
+```{r Lead Poisoning}
+
+#Lead Poisoning
+
+T_LeadP_glm2 <- glm(Threats_LeadPoisoning ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_LeadP_glm2)
+T_LeadP_fit2 <-simulateResiduals(T_LeadP_glm2, n=250, refit = F)
+plot(T_LeadP_fit2)
+confint(T_LeadP_glm2)
+
+T_LeadP_glm2_emmeans <- emmeans(T_LeadP_glm2, ~ Catagory_Activity)
+T_LeadP_glm2_emmeans
+summary(T_LeadP_glm2_emmeans, type = "response")
+
+table(Livestock_test$Threats_LeadPoisoning) # No 50 ; Yes 2
+table(Hunting_test$Threats_LeadPoisoning)   # No 18 ; Yes 1
+
+```
+
+```{r Wind turbines}
+
+# Wind turbines
+
+T_WindT_glm2 <- glm(Threats_WindTurbines ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_WindT_glm2)
+T_WindT_fit2 <-simulateResiduals(T_WindT_glm2, n=250, refit = F)
+plot(T_WindT_fit2)
+confint(T_WindT_glm2)
+
+T_WindT_glm2_emmeans <- emmeans(T_WindT_glm2, ~ Catagory_Activity)
+T_WindT_glm2_emmeans
+summary(T_WindT_glm2_emmeans, type = "response")
+
+table(Livestock_test$Threats_WindTurbines) # No 48 ; Yes 4
+table(Hunting_test$Threats_WindTurbines)   # No 19 ; Yes 0
+
+```
+
+```{r human disturbance}
+
+# human disturbance
+
+T_HumanDist_glm2 <- glm(Threats_HumanDisturbance ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_HumanDist_glm2)
+T_HumanDist_fit2 <-simulateResiduals(T_HumanDist_glm2, n=250, refit = F)
+plot(T_HumanDist_fit2)
+confint(T_HumanDist_glm2)
+
+T_HumanDist_glm2_emmeans <- emmeans(T_HumanDist_glm2, ~ Catagory_Activity)
+T_HumanDist_glm2_emmeans
+summary(T_HumanDist_glm2_emmeans, type = "response")
+
+table(Livestock_test$Threats_HumanDisturbance) # No 50 ; Yes 2
+table(Hunting_test$Threats_HumanDisturbance)   # No 19 ; Yes 0
+
+```
+
+```{r vulture persercution}
+
+# vulture persercution
+
+T_VPersecution_glm2 <- glm(Threats_VulturePersecution ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_VPersecution_glm2)
+T_VPersecution_fit2 <-simulateResiduals(T_VPersecution_glm2, n=250, refit = F)
+plot(T_VPersecution_fit2)
+confint(T_VPersecution_glm2)
+
+T_VPersecution_glm2_emmeans <- emmeans(T_VPersecution_glm2, ~ Catagory_Activity)
+T_VPersecution_glm2_emmeans
+summary(T_VPersecution_glm2_emmeans, type = "response")
+
+table(Livestock_test$Threats_VulturePersecution) # No 51 ; Yes 1
+table(Hunting_test$Threats_VulturePersecution)   # No 18 ; Yes 1
+
+```
+
+```{r drowning}
+
+#drowning
+
+T_Drowning_glm2 <- glm(Threats_Drowning ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_Drowning_glm2)
+T_Drowning_fit2 <-simulateResiduals(T_Drowning_glm2, n=250, refit = F)
+plot(T_Drowning_fit2)
+confint(T_Drowning_glm2)
+
+T_Drowning_glm2_emmeans <- emmeans(T_Drowning_glm2, ~ Catagory_Activity)
+T_Drowning_glm2_emmeans
+summary(T_Drowning_glm2_emmeans, type = "response")
+
+table(Livestock_test$Threats_Drowning) # No 51 ; Yes 1
+table(Hunting_test$Threats_Drowning)   # No 19 ; Yes 0
+
+```
+
+```{r vehicle collisions}
+
+#vehicle collisions
+
+T_VehicleCol_glm2 <- glm(Threats_SUMVehicleCollisions ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_VehicleCol_glm2)
+T_VehicleCol_fit2 <-simulateResiduals(T_VehicleCol_glm2, n=250, refit = F)
+plot(T_VehicleCol_fit2)
+confint(T_VehicleCol_glm2)
+
+T_VehicleCol_glm2_emmeans <- emmeans(T_VehicleCol_glm2, ~ Catagory_Activity)
+T_VehicleCol_glm2_emmeans
+summary(T_VehicleCol_glm2_emmeans, type = "response")
+
+table(Livestock_test$Threats_SUMVehicleCollisions) # No 52 ; Yes 0
+table(Hunting_test$Threats_SUMVehicleCollisions)   # No 17 ; Yes 2
+
+```
+
+```{r nest site loss}
+
+#nest site loss
+
+T_NestSiteLoss_glm2 <- glm(Threats_NestSiteLoss ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_NestSiteLoss_glm2)
+T_NestSiteLoss_fit2 <-simulateResiduals(T_NestSiteLoss_glm2, n=250, refit = F)
+plot(T_NestSiteLoss_fit2)
+confint(T_NestSiteLoss_glm2)
+
+T_NestSiteLoss_glm2_emmeans <- emmeans(T_NestSiteLoss_glm2, ~ Catagory_Activity)
+T_NestSiteLoss_glm2_emmeans
+summary(T_NestSiteLoss_glm2_emmeans, type = "response")
+
+table(Livestock_test$Threats_NestSiteLoss) # No 51 ; Yes 1
+table(Hunting_test$Threats_NestSiteLoss)   # No 18 ; Yes 1
+
+```
+
+```{r Disease}
+
+#Disease
+
+T_Disease_glm2 <- glm(Threats_Disease ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_Disease_glm2)
+T_Disease_fit2 <-simulateResiduals(T_Disease_glm2, n=250, refit = F)
+plot(T_Disease_fit2)
+confint(T_Disease_glm2)
+
+T_Disease_glm2_emmeans <- emmeans(T_Disease_glm2, ~ Catagory_Activity)
+T_Disease_glm2_emmeans
+summary(T_Disease_glm2_emmeans, type = "response")
+
+table(Livestock_test$Threats_Disease) # No 51 ; Yes 1
+table(Hunting_test$Threats_Disease)   # No 19 ; Yes 0
+
+```
+
+```{r climate change}
+
+#climate change
+
+T_ClimChan_glm2 <- glm(Threats_ClimateChange ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(T_ClimChan_glm2)
+T_ClimChan_fit2 <-simulateResiduals(T_ClimChan_glm2, n=250, refit = F)
+plot(T_ClimChan_fit2)
+confint(T_ClimChan_glm2)
+
+T_ClimChan_glm2_emmeans <- emmeans(T_ClimChan_glm2, ~ Catagory_Activity)
+T_ClimChan_glm2_emmeans
+summary(T_ClimChan_glm2_emmeans, type = "response")
+
+table(Livestock_test$Threats_ClimateChange) # No 52 ; Yes 0
+table(Hunting_test$Threats_ClimateChange)   # No 19 ; Yes 0
+
+```
+
+
+# Benefits
+
+```{r Cleaning Service}
+
+#Cleaning Service
+
+B_CleaningServ_glm2 <- glm(Benefits_CleaningServiceSUM ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(B_CleaningServ_glm2)
+B_CleaningServ_fit2 <-simulateResiduals(B_CleaningServ_glm2, n=250, refit = F)
+plot(B_CleaningServ_fit2)
+confint(B_CleaningServ_glm2)
+
+B_CleaningServ_glm2_emmeans <- emmeans(B_CleaningServ_glm2, ~ Catagory_Activity)
+B_CleaningServ_glm2_emmeans
+summary(B_CleaningServ_glm2_emmeans, type = "response")
+
+table(Livestock_test$Benefits_CleaningServiceSUM) # No 21 ; Yes 31
+table(Hunting_test$Benefits_CleaningServiceSUM)   # No 12 ; Yes 7
+
+```
+
+```{r Personal Enjoyment}
+
+#Personal Enjoyment
+
+B_PEnjoy_glm2 <- glm(Benefits_PersonalSatisfactionEnjoySUM ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(B_PEnjoy_glm2)
+B_PEnjoy_glm_fit2 <-simulateResiduals(B_PEnjoy_glm2, n=250, refit = F)
+plot(B_PEnjoy_glm_fit2)
+confint(B_PEnjoy_glm2)
+
+B_PEnjoy_glm2_emmeans <- emmeans(B_PEnjoy_glm2, ~ Catagory_Activity)
+B_PEnjoy_glm2_emmeans
+summary(B_PEnjoy_glm2_emmeans, type = "response")
+
+table(Livestock_test$Benefits_PersonalSatisfactionEnjoySUM) # No 35 ; Yes 17
+table(Hunting_test$Benefits_PersonalSatisfactionEnjoySUM)   # No 14 ; Yes 5
+
+```
+
+```{r Conservation}
+
+#Conservation
+
+B_Conservation_glm2 <- glm(Benefits_ConservationSUM ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(B_Conservation_glm2)
+B_Conservation_glm_fit2 <-simulateResiduals(B_Conservation_glm2, n=250, refit = F)
+plot(B_Conservation_glm_fit2)
+confint(B_Conservation_glm2)
+x <- emmeans(B_Conservation_glm2, ~ Catagory_Activity)
+summary(x, type = "response")
+print(B_Ecotourism_glm2_fit_sum)
+
+B_Conservation_glm2_emmeans <- emmeans(B_Conservation_glm2, ~ Catagory_Activity)
+B_Conservation_glm2_emmeans
+summary(B_Conservation_glm2_emmeans, type = "response")
+
+table(Livestock_test$Benefits_ConservationSUM) # No 42 ; Yes 10
+table(Hunting_test$Benefits_ConservationSUM)   # No 17 ; Yes 2
+
+```
+
+```{r Ecotourism}
+#Ecotourism
+
+B_Ecotourism_glm2 <- glm(Benefits_Ecotourism ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(B_Ecotourism_glm2)
+confint(B_Ecotourism_glm2)
+B_Ecotourism_fit2 <-simulateResiduals(B_Ecotourism_glm2, n=250, refit = F)
+plot(B_Ecotourism_fit2)
+B_Ecotourism_glm2_fit <- emmeans(B_Ecotourism_glm2, ~ Catagory_Activity)
+B_Ecotourism_glm2_fit_sum <- summary(B_Ecotourism_glm2_fit, type = "response")
+print(B_Ecotourism_glm2_fit_sum)
+plot(B_Ecotourism_glm2_fit_sum)
+# Catagory_Activity   prob     SE  df asymp.LCL asymp.UCL
+ #Hunting           0.2632 0.1010 Inf   0.11398     0.498
+# Livestock         0.0385 0.0267 Inf   0.00964     0.141
+# thus hunters are  0.2632 / 0.0385 times more likely to mention ecotourism (or 0.2632-0.0385% more likely)
+
+Ecotourism_plot <- ggplot(B_Ecotourism_glm2_fit_sum, aes(x = Catagory_Activity, y=prob)) +
+  geom_bar(stat="identity", width = 0.4, fill = "Grey") +
+  geom_errorbar(aes(ymin=asymp.LCL, ymax=asymp.UCL), width=0.06,position=position_dodge(.9)) +
+  labs(x = "", y = "Probability of mentioning ecotourism \n ") +
+  scale_x_discrete(labels=c("Hunting", "Livestock \n farming")) +
+  theme_classic() +
+  theme(aspect.ratio = 2/1)
+
+B_Ecotourism_glm2_emmeans <- emmeans(B_Ecotourism_glm2, ~ Catagory_Activity)
+B_Ecotourism_glm2_emmeans
+summary(B_Ecotourism_glm2_emmeans, type = "response")
+
+table(Livestock_test$Benefits_Ecotourism) # No 50 ; Yes 2
+table(Hunting_test$Benefits_Ecotourism)   # No 14 ; Yes 5
+
+```
+
+```{r BNone}
+#None
+
+B_None_glm2 <- glm(Benefits_None ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(B_None_glm2)
+B_None_fit2 <-simulateResiduals(B_None_glm2, n=250, refit = F)
+plot(B_None_fit2)
+confint(B_None_glm2)
+
+B_None_glm2_emmeans <- emmeans(B_None_glm2, ~ Catagory_Activity)
+B_None_glm2_emmeans
+summary(B_None_glm2_emmeans, type = "response")
+
+table(Livestock_test$Benefits_None) # No 46 ; Yes 6
+table(Hunting_test$Benefits_None)   # No 14 ; Yes 5
+
+```
+
+```{r Research}
+
+#Research
+
+B_Research_glm2 <- glm(Benefits_Research ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(B_Research_glm2)
+confint(B_Research_glm2)
+B_Research_fit2 <-simulateResiduals(B_Research_glm2, n=250, refit = F)
+plot(B_Research_fit2)
+
+B_Research_glm2_emmeans <- emmeans(B_Research_glm2, ~ Catagory_Activity)
+B_Research_glm2_emmeans
+summary(B_Research_glm2_emmeans, type = "response")
+
+table(Livestock_test$Benefits_Research) # No 51 ; Yes 1
+table(Hunting_test$Benefits_Research)   # No 18 ; Yes 1
+
+```
+
+```{r Locating Mortalities}
+
+#Locating Mortalities
+
+B_LocatingMortalities_glm2 <- glm(Benefits_FindingAnimals ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(B_LocatingMortalities_glm2)
+B_LocatingMortalities_fit2 <-simulateResiduals(B_LocatingMortalities_glm2, n=250, refit = F)
+plot(B_LocatingMortalities_fit2)
+confint(B_LocatingMortalities_glm2)
+B_LocatingMortalities_glm2_emmeans <- emmeans(B_LocatingMortalities_glm2, ~ Catagory_Activity)
+B_LocatingMortalities_glm2_emmeans
+summary(B_LocatingMortalities_glm2_emmeans, type = "response")
+
+B_LocatingMortalities_glm2_emmeans <- emmeans(B_LocatingMortalities_glm2, ~ Catagory_Activity)
+B_LocatingMortalities_glm2_emmeans
+summary(B_LocatingMortalities_glm2_emmeans, type = "response")
+
+library(rcompanion)
+
+groupwiseMean(Benefits_FindingAnimals ~ 1,
+              data   = Hunting_test,
+              conf   = 0.95,
+              digits = 3)
+
+D_ProbAnimal_glm2$coefficients[2]+qt(0.025, 69)*2141.7604  ; D_ProbAnimal_glm2$coefficients[2]+qt(0.975, 69)*2141.7604
+
+table(Livestock_test$Benefits_FindingAnimals) # No 52 ; Yes 0
+table(Hunting_test$Benefits_FindingAnimals)   # No 18 ; Yes 1
+
+```
+
+```{r Disease prevention }
+
+#Disease prevention 
+
+B_DiseasePrevention_glm2 <- glm(Benefits_DiseaseManagement ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(B_DiseasePrevention_glm2)
+B_DiseasePrevention_fit2 <-simulateResiduals(B_DiseasePrevention_glm2, n=250, refit = F)
+plot(B_DiseasePrevention_fit2)
+confint(B_DiseasePrevention_glm2)
+
+B_DiseasePrevention_glm2_emmeans <- emmeans(B_DiseasePrevention_glm2, ~ Catagory_Activity)
+B_DiseasePrevention_glm2_emmeans
+summary(B_DiseasePrevention_glm2_emmeans, type = "response")
+
+table(Livestock_test$Benefits_DiseaseManagement) # No 51 ; Yes 1
+table(Hunting_test$Benefits_DiseaseManagement)   # No 19 ; Yes 0
+
+```
+
+
+# Disadvantagous
+
+```{r DNone}
+
+#None
+
+D_None_glm2 <- glm(Disadvantageous_Nothing ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(D_None_glm2)
+confint(D_None_glm2)
+D_None_fit2 <-simulateResiduals(D_None_glm2, n=250, refit = F)
+plot(D_None_fit2)
+D_None_glm2_fit <- emmeans(D_None_glm2, ~ Catagory_Activity)
+D_None_glm2_fit_sum <- summary(D_None_glm2_fit, type = "response")
+print(D_None_glm2_fit_sum)
+
+#Catagory_Activity  prob     SE  df asymp.LCL asymp.UCL
+ #Hunting           0.789 0.0935 Inf     0.554     0.919
+ #Livestock         0.500 0.0693 Inf     0.367     0.633
+
+#Hunters are thus 0.789/0.500 times more likely to perceive no disadvantage (or 0.789-0.500% more likely)
+
+None <- ggplot(D_None_glm2_fit_sum, aes(x = Catagory_Activity, y=prob)) +
+  geom_bar(stat="identity", width = 0.4, fill = "Grey") +
+  geom_errorbar(aes(ymin=asymp.LCL, ymax=asymp.UCL), width=0.06,position=position_dodge(.9)) +
+  labs(x = "", y = "Probability of specifying no disadvantages \n ") +
+  scale_x_discrete(labels=c("Hunting", "Livestock \n farming")) +
+  theme_classic() +
+  theme(aspect.ratio = 2/1)
+
+D_None_glm2_emmeans <- emmeans(D_None_glm2, ~ Catagory_Activity)
+D_None_glm2_emmeans
+summary(D_None_glm2_emmeans, type = "response")
+
+table(Livestock_test$Disadvantageous_Nothing) # No 26 ; Yes 26
+table(Hunting_test$Disadvantageous_Nothing)   # No 4  ; Yes 15
+
+```
+
+```{r}
+
+# Maintenance
+
+D_CleaningServ_glm2 <- glm(Disadvantageous_CleaningMaintananceSUM ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(D_CleaningServ_glm2)
+confint(D_CleaningServ_glm2)
+D_CleaningServ_fit2 <-simulateResiduals(D_CleaningServ_glm2, n=250, refit = F)
+plot(D_CleaningServ_fit2)
+
+D_CleaningServ_glm2_emmeans <- emmeans(D_CleaningServ_glm2, ~ Catagory_Activity)
+D_CleaningServ_glm2_emmeans
+summary(D_CleaningServ_glm2_emmeans, type = "response")
+
+table(Livestock_test$Disadvantageous_CleaningMaintananceSUM) # No 46 ; Yes 6
+table(Hunting_test$Disadvantageous_CleaningMaintananceSUM)   # No 18 ; Yes 1
+
+```
+
+```{r}
+#Problem animals
+
+D_ProbAnimal_glm2 <- glm(Disadvantageous_ProblemAnimalsIncreaseSUM ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(D_ProbAnimal_glm2)
+D_ProbAnimal_fit2 <-simulateResiduals(D_ProbAnimal_glm2, n=250, refit = F)
+plot(D_ProbAnimal_fit2)
+confint(D_ProbAnimal_glm2) #get compeltely different answers
+D_ProbAnimal_glm2$coefficients[2]+qt(0.025, 69)*2141.7604  ; D_ProbAnimal_glm2$coefficients[2]+qt(0.975, 69)*2141.7604
+
+D_ProbAnimal_glm2_emmeans <- emmeans(D_ProbAnimal_glm2, ~ Catagory_Activity)
+D_ProbAnimal_glm2_emmeans
+summary(D_ProbAnimal_glm2_emmeans, type = "response")
+
+table(Livestock_test$Disadvantageous_ProblemAnimalsIncreaseSUM) # No 42 ; Yes 10
+table(Hunting_test$Disadvantageous_ProblemAnimalsIncreaseSUM)   # No 19 ; Yes 0
+
+```
+
+```{r}
+#Site security
+
+D_SSecurity_glm2 <- glm(Disadvantageous_SiteSecuritySUM ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(D_SSecurity_glm2)
+D_SSecurity_fit2 <-simulateResiduals(D_SSecurity_glm2, n=250, refit = F)
+plot(D_SSecurity_fit2)
+confint(D_SSecurity_glm2)
+D_SSecurity_glm2$coefficients[2]+qt(0.025, 69)*1.1299  ; D_SSecurity_glm2$coefficients[2]+qt(0.975, 69)*1.1299 # Differs slightly from above
+
+D_SSecurity_glm2_emmeans <- emmeans(D_SSecurity_glm2, ~ Catagory_Activity)
+D_SSecurity_glm2_emmeans
+summary(D_SSecurity_glm2_emmeans, type = "response")
+
+table(Livestock_test$Disadvantageous_SiteSecuritySUM) # No 47 ; Yes 5
+table(Hunting_test$Disadvantageous_SiteSecuritySUM)   # No 18 ; Yes 1
+
+```
+
+```{r}
+
+#Untidy
+
+D_Untidy_glm2 <- glm(Disadvantageous_UnsightlyUncleanUntidy ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(D_Untidy_glm2)
+D_Untidy_fit2 <-simulateResiduals(D_Untidy_glm2, n=250, refit = F)
+plot(D_Untidy_fit2)
+confint(D_Untidy_glm2)
+D_Untidy_glm2$coefficients[2]+qt(0.025, 69)*0.7855  ; D_Untidy_glm2$coefficients[2]+qt(0.975, 69)*0.7855 #differs slightly from above
+
+D_Untidy_glm2_emmeans <- emmeans(D_Untidy_glm2, ~ Catagory_Activity)
+D_Untidy_glm2_emmeans
+summary(D_Untidy_glm2_emmeans, type = "response")
+
+table(Livestock_test$Disadvantageous_UnsightlyUncleanUntidy) # No 47 ; Yes 5
+table(Hunting_test$Disadvantageous_UnsightlyUncleanUntidy)   # No 16 ; Yes 3
+
+```
+
+```{r}
+
+#Smell
+
+D_Smell_glm2 <- glm(Disadvantageous_Smell ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(D_Smell_glm2)
+D_Smell_fit2 <-simulateResiduals(D_Smell_glm2, n=250, refit = F)
+plot(D_Smell_fit2)
+confint(D_Smell_glm2)
+D_Smell_glm2$coefficients[2]+qt(0.025, 69)*1.18710  ; D_Smell_glm2$coefficients[2]+qt(0.975, 69)*1.18710 #differs from above
+
+D_Smell_glm2_emmeans <- emmeans(D_Smell_glm2, ~ Catagory_Activity)
+D_Smell_glm2_emmeans
+summary(D_Smell_glm2_emmeans, type = "response")
+
+table(Livestock_test$Disadvantageous_Smell) # No 49 ; Yes 3
+table(Hunting_test$Disadvantageous_Smell)   # No 18 ; Yes 1
+
+```
+
+```{r}
+
+#Disease
+
+D_Disease_glm2 <- glm(Disadvantageous_Disease ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(D_Disease_glm2)
+D_Disease_fit2 <-simulateResiduals(D_Disease_glm2, n=250, refit = F)
+plot(D_Disease_fit2)
+confint(D_Disease_glm2)
+D_Disease_glm2$coefficients[2]+qt(0.025, 69)*1.1299  ; D_Disease_glm2$coefficients[2]+qt(0.975, 69)*1.1299 #differs slightly form above
+
+D_Disease_glm2_emmeans <- emmeans(D_Disease_glm2, ~ Catagory_Activity)
+D_Disease_glm2_emmeans
+summary(D_Disease_glm2_emmeans, type = "response")
+
+table(Livestock_test$Disadvantageous_Disease) # No 47 ; Yes 5
+table(Hunting_test$Disadvantageous_Disease)   # No 18 ; Yes 1
+
+```
+
+```{r}
+
+#Carcass sourcing
+
+D_CarcassSourcing_glm2 <- glm(Disadvantageous_CarcassSourcing ~ Catagory_Activity, family = binomial, data = Comparison_L_H)
+summary(D_CarcassSourcing_glm2)
+D_CarcassSourcing_fit2 <-simulateResiduals(D_CarcassSourcing_glm2, n=250, refit = F)
+plot(D_CarcassSourcing_fit2)
+confint(D_CarcassSourcing_glm2)
+D_CarcassSourcing_glm2$coefficients[2]+qt(0.025, 69)*4067.6259 ; D_CarcassSourcing_glm2$coefficients[2]+qt(0.975, 69)*4067.6259
+
+D_CarcassSourcing_glm2_emmeans <- emmeans(D_CarcassSourcing_glm2, ~ Catagory_Activity)
+D_CarcassSourcing_glm2_emmeans
+summary(D_CarcassSourcing_glm2_emmeans, type = "response")
+
+table(Livestock_test$Disadvantageous_CarcassSourcing) # No 50 ; Yes 2
+table(Hunting_test$Disadvantageous_CarcassSourcing)   # No 19 ; Yes 0
+
+```
+
+

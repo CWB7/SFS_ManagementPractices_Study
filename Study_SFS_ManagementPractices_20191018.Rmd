@@ -1,0 +1,1026 @@
+---
+title: "SFSManager_Perceptions_Analysis"
+author: "C.W. Brink"
+date: "2019-10-18"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# South African vulture supplementary feeding station managers: perceptions, awareness and liklihood of threats.
+
+This document shows the analysis associated with the paper titled "Perceptions of vulture supplementary feeding site managers and potential hidden risks to avian scavengers", published in Conservation Science and Practice in 2020. The analysis explores data from a questionnaire survey with vulture supplementary feeding site (SFS) managers to determine the extent of problematic management practices that may endanger vultures. It is advisable to read the results of the paper to give context to the code provided below.
+
+The raw data associated with the analysis can unfortunately not be shared at this time.
+
+### Data preparation
+
+```{r package installation, echo=FALSE, message=FALSE, warning=FALSE, include=TRUE, results='hide'}
+
+rm(list=ls())
+
+library (tidyverse)
+library(ggplot2)
+library (dplyr)
+library(tidyr)
+library(forcats)
+library(ggpubr)
+library(readr)
+
+getwd()
+
+Chpt1B_Data<- read_delim("VRResponses_FINAL_Rworksheet_20191021_CheckedRefined_ActiveSiteCatAdjusted.csv", 
+                         ";", escape_double = FALSE, trim_ws = TRUE)
+
+Raw_Data <- as_tibble(Chpt1B_Data)
+
+Data <- Raw_Data %>%
+  select(., -Number, -Date_Interviewed, -Time_Start,
+               -Time_End, -Language_Survey, -Name_Respondent)%>%
+  as_tibble(.)
+
+Data <- as_tibble(Data)
+
+```
+
+```{r Subset to only Active SFS}
+# Subset to only active SFS in SA - questions such as best practices are only relevent to currely active SFS.
+
+Active_SFS <- Data %>%
+  filter(., Status_Category == "Active", Country == "South Africa")
+
+#respondents and survey method
+Resp <- Active_SFS
+
+Resp[1, c("Method")] <- "Telephone"
+Resp[2, c("Method")] <- "Telephone"
+Resp[3, c("Method")] <- "Telephone"
+Resp[4, c("Method")] <- "Telephone"
+Resp[7, c("Method")] <- "Email"
+Resp[8, c("Method")] <- "Telephone"
+Resp[84, c("Method")] <- "Email"
+Resp[86, c("Method")] <- "Telephone"
+Resp[74, c("Method")] <- "Email"
+
+Resp <- Resp %>%
+  filter(., SFS_Code != "JC_VR069", SFS_Code != "JC_VR263_2", SFS_Code != "JC_VR255")
+
+nrow(Resp)
+utils::View(Resp)
+table(Resp$Method)
+sum(!complete.cases(Resp$Method))
+
+```
+
+
+# Best Practices
+
+This section includes all questions regarding best practices and includes questions relating to awareness.
+
+## Carcass suitability
+
+```{r carcass suitability, include=FALSE}
+
+ggplot(Active_SFS, aes(x= Any_unsuitable_carcassess)) +
+  geom_bar() + 
+  coord_flip() +
+  labs(x = "", y = "Count") +
+  theme_classic()
+
+table(Active_SFS$Any_unsuitable_carcassess)
+
+#All carcasses provided 31 - 30.097
+#Some unsuitable 72 - 69.903%
+#Total 103
+
+```
+
+Some care should be taken with interpreting the above. A few SFS indicated that although they provide all carcasses they also only use certain NSAID that their vet told them are not dangerous for vultures.
+
+### Unsuitable carcasses catagories
+
+```{r, include=FALSE}
+
+# carcasses considered unsuitable - categories
+Unsuitable_carcasses <- Active_SFS %>%
+  select(., starts_with("UnsuitableCriteria"))
+
+sum(Unsuitable_carcasses$UnsuitableCriteria_AnsweredQuestion)
+
+Unsuitable_criteria <-colSums(Unsuitable_carcasses)
+
+ColNames <- colnames(Unsuitable_carcasses)
+
+Unsuitable_criteria <- data.frame(ColNames, Unsuitable_criteria)
+Unsuitable_criteria <- Unsuitable_criteria %>% select(., ColNames, Unsuitable_criteria)
+
+Unsuitable_criteria <- Unsuitable_criteria %>% 
+  rename(Criteria = ColNames, Respondents = Unsuitable_criteria) %>% arrange(desc(Respondents))
+
+Unsuitable_criteria <- as_tibble(Unsuitable_criteria)
+
+```
+
+```{r}
+
+Unsuitable_criteria <- Unsuitable_criteria %>%
+  mutate(Percentage = (Respondents / sum(Unsuitable_carcasses$UnsuitableCriteria_AnsweredQuestion)) * 100)
+
+```
+
+
+```{r, include=FALSE}
+
+Unsuitable_crit_plot <- slice(Unsuitable_criteria, 2, 6:7, 10, 12, 16, 17)
+Unsuitable_crit_plot <-  as_tibble(Unsuitable_crit_plot)
+
+Unsuit_lables <- c("Related to veterinary drugs", "Diseased animals", "Lead avoidance", "Poisoned carcasses", "Pesticide concerns", "Rotten carcasses", "Lightning struck animals")
+
+Unsuitable_crit_plot <- data.frame(Unsuit_lables, Unsuitable_crit_plot)
+
+```
+
+```{r}
+CarcassSuit_Theme = theme(
+  axis.title.x = element_text(size = 10),
+  axis.text.x = element_text(size = 10),
+  )
+
+```
+
+```{r, include=TRUE, results='hold'}
+
+UnsuitCarc_Plot <- ggplot(Unsuitable_crit_plot, aes(x= reorder(Unsuit_lables, Percentage), y=Percentage)) +
+  geom_bar(stat="identity", width = 0.4) +  
+  ylim(0, 90) +
+  coord_flip() +
+  labs(x = "", y = "\n % of managers using each  \n carcass unsuitability criteria") +
+  theme_classic(base_size = 10) +
+  #geom_text(aes(label = round(Percentage)), position = position_dodge(0.1), vjust = 0.4, hjust= -0.5)
+  scale_y_continuous(breaks = seq(0, 90, by = 10)) +
+  CarcassSuit_Theme
+
+UnsuitCarc_Plot
+
+```
+
+* Related to veterinary drugs * included: Darted animals, Animals injected with cortisone, Recently dewormed animals, Vacinated animals, Growthhormones, Only natural deaths, NSAI, Antibiotics, Not Livestock.
+
+This following graph shows the percentages of each of the sub catagories that fed into the "Related to veterinary drugs" category - this is in relation to the the total number of respondents.
+
+Supplementary material:
+
+```{r Vet Drugs, include=FALSE}
+
+Related_VetD <- slice(Unsuitable_criteria, 3:5, 8:9, 11, 13, 15)
+
+Related_VetD <-  as_tibble(Related_VetD)
+
+Unsuit_lables2 <- c("Veterinary drugs", "NSAID", "Antibiotics", "Darted animals", "Cortisone", "Livestock", "Only natural deaths", "Euthanized animals")
+
+```
+
+```{r, include=TRUE}
+Related_VetD <- Related_VetD %>%
+  mutate(PercentageRelVet = (Respondents / sum(Unsuitable_carcasses$UnsuitableCriteria_RelatedtoVeterinaryDrugs)) * 100)
+
+Related_VetD <- data.frame(Unsuit_lables2, Related_VetD)
+
+VetD_plot <- ggplot(Related_VetD, aes(x= reorder(Unsuit_lables2, PercentageRelVet), y=PercentageRelVet)) +
+  geom_bar(stat="identity", width = 0.4) + 
+  coord_flip() +
+  ylim(0, 70) +
+  labs(x = "", y = "\n % of managers avoiding veterinary  \n drug contaminated carcasses") +
+  theme_classic(base_size = 10) +
+  #geom_text(aes(label = round(PercentageRelVet)), position = position_dodge(0.1), vjust = 0.4, hjust= -0.5)
+  scale_y_continuous(breaks = seq(0, 70, by = 10)) + 
+  CarcassSuit_Theme
+
+VetD_plot
+
+```
+
+```{r}
+
+CarcSuit_Theme = theme(
+  axis.title.x = element_text(size = 10),
+  axis.text.x = element_text(size = 10),
+  )
+
+UnsuitCarc_Plot <-  UnsuitCarc_Plot + CarcSuit_Theme
+UnsuitCarc_Plot
+
+VetD_plot <- VetD_plot + CarcSuit_Theme
+VetD_plot
+
+CarcassSuit_fig <- ggarrange(UnsuitCarc_Plot,VetD_plot,
+                    labels = c("A", "B"),
+                    font.label = list(size = 10, color = "black"),
+                    ncol = 2, nrow = 1)
+
+CarcassSuit_fig 
+
+ggsave("Fig3.tiff", units = "cm", width = 18, height = 6, dpi = 800)
+
+```
+
+The most commonly refered to veterinary drug if specific circumstances were mentioned was Non-steroidal anti-inflamatory drugs.Pesticide concerns included one farmer that did not put out dipped animals and one that one put out organically farmed animals. Criteria that were only mentioned once were excluded: Very large carcasses, Calves, Carcassess from 3rd parties, Dogs.
+
+### Identifying the number of SFS that provide game that specified Pb avoidence.
+
+```{r Game prov and Carcass criteria}
+
+Game_only <-subset(Active_SFS, Active_SFS$Game_kg_y > 0)
+
+Game_only2 <-subset(Game_only, Any_unsuitable_carcassess == "Some unsuitable" | Any_unsuitable_carcassess == "All carcassess provided")
+
+sum(Game_only$UnsuitableCriteria_LeadAvoidance) # 4/38 = 11%
+
+```
+
+## Location Selection
+
+```{r Location selection, include=FALSE}
+
+LocalSelect <- Active_SFS %>%
+  select(., starts_with("LocalSelection"))
+
+
+LocSel <-colSums(LocalSelect)
+LocSel <-as_tibble(LocSel)
+
+ColNames2 <- colnames(LocalSelect)
+
+LocSel <- data.frame(ColNames2, LocSel)
+
+LocSel <- LocSel %>% 
+  rename(Criteria = ColNames2, Respondents = value) %>% arrange(desc(Respondents))
+
+LocSel <- as_tibble(LocSel)
+
+
+LocSel <- LocSel %>%
+  mutate(Percentage = (Respondents / sum(LocalSelect$LocalSelection_QuestionAnswered)) * 100)
+
+ggplot(LocSel, aes(x= reorder(Criteria, Percentage), y=Percentage)) +
+  geom_bar(stat="identity", width = 0.5) + 
+  coord_flip() +
+  labs(x = "", y = "Percentage (%)") +
+  theme_classic() +
+  geom_text(aes(label = round(Percentage)), position = position_dodge(0.1), vjust = 0.4, hjust= -0.5)
+
+```
+
+```{r Location selection_Themes, include=FALSE}
+
+LocalSelectTheme <- Active_SFS %>%
+  select(., starts_with("LocalSelectTheme"))
+
+sum(LocalSelect$LocalSelection_QuestionAnswered) 
+
+LocSel2 <-colSums(LocalSelectTheme)
+LocSel2 <-as_tibble(LocSel2)
+
+ColNames2b <- colnames(LocalSelectTheme)
+
+LocSel2 <- data.frame(ColNames2b, LocSel2)
+
+LocSel2 <- LocSel2 %>% 
+  rename(Criteria = ColNames2b, Respondents = value) %>% arrange(desc(Respondents))
+
+LocSel2 <- as_tibble(LocSel2)
+
+```
+
+```{r}
+
+LocSel2 <- LocSel2 %>%
+  mutate(Percentage = (Respondents / sum(LocalSelect$LocalSelection_QuestionAnswered)) * 100)
+
+Unsuit_lables3 <- c("Accessibility for vultures", "Accessibility for people", "Open area", "Vulture threats", "Comfort of use for vultures", "Vulture not considered", "Farm security and benefits")
+
+
+LocSel2 <- data.frame(Unsuit_lables3, LocSel2)
+
+LocSel2 <- slice(LocSel2, 1:2, 4:7)
+
+ggplot(LocSel2, aes(x= reorder(Unsuit_lables3, Percentage), y=Percentage)) +
+  geom_bar(stat="identity", width = 0.4) + 
+  ylim(0, 80) +
+  coord_flip() +
+  labs(x = "", y = "\n % of managers") +
+  theme_classic(base_size = 28) +
+  #geom_text(aes(label = round(Percentage)), position = position_dodge(0.1), vjust = 0.4, hjust= -0.5)
+  scale_y_continuous(breaks = seq(0, 80, by=10))
+
+```
+
+
+### Vulture accessibility subtheme:
+
+```{r location select subtheme flight considerations, include=FALSE}
+
+LocalSelectSubT_Threat <- Active_SFS %>%
+  select(., starts_with("LocalSelectSubTheme_VultAccessibility"))
+
+LocSel3 <-colSums(LocalSelectSubT_Threat)
+LocSel3 <-as_tibble(LocSel3)
+
+ColNames2c <- colnames(LocalSelectSubT_Threat)
+
+LocSel3 <- data.frame(ColNames2c, LocSel3)
+
+LocSel3 <- LocSel3 %>% 
+  rename(Criteria = ColNames2c, Respondents = value) %>% arrange(desc(Respondents))
+
+LocSel3 <- as_tibble(LocSel3)
+
+```
+
+```{r}
+
+LocSel3 <- LocSel3 %>%
+  mutate(Percentage = (Respondents / sum(LocalSelectTheme$LocalSelectTheme_VultAccessibility_TOTAL)) * 100)
+
+sum(LocalSelectTheme$LocalSelectTheme_VultAccessibility_TOTAL)
+
+```
+
+```{r, include=FALSE}
+
+Unsuit_lables4 <- c("Flight considerations", "Finding carcasses", "Vultures present in area")
+
+LocSel3 <- data.frame(Unsuit_lables4, LocSel3)
+
+```
+
+```{r}
+par(mfrow = c(1, 2))
+Access_plot <- ggplot(LocSel3, aes(x= reorder(Unsuit_lables4, Percentage), y=Percentage)) +
+  geom_bar(stat="identity", width = 0.4) + 
+  coord_flip() +
+  ylim(0, 100) +
+  labs(x = "", y = "\n % of managers") +
+  theme_classic(base_size = 24) +
+  #geom_text(aes(label = round(Percentage)), position = position_dodge(0.1), vjust = 0.4, hjust= -0.5) 
+  scale_y_continuous(breaks = seq(0, 100, by = 10))
+  
+Access_plot
+
+```
+
+
+### Flight considerations: 
+
+```{r flight considerations, include=FALSE}
+
+Flight_consid <- slice(LocSel, 4, 7:8, 14, 22)
+
+Flight_consid <-  as_tibble(Flight_consid)
+
+Fconsid_lables <- c("Elevated area", "Open area for take-off", "Up-draft and wind", "Slope", "Drop-off")
+
+
+```
+
+```{r}
+
+Flight_consid <- Flight_consid %>%
+  mutate(PercentageFlightC = (Respondents / sum(Active_SFS$LocalSelection_FlightConsiderations)) * 100)
+
+Flight_consid <- data.frame(Fconsid_lables, Flight_consid)
+
+LocSel_fig <- ggplot(Flight_consid, aes(x= reorder(Fconsid_lables, PercentageFlightC), y=PercentageFlightC)) +
+  geom_bar(stat="identity", width = 0.4) + 
+  coord_flip() +
+  ylim(0, 70) +
+  labs(x = "", y = "\n % of managers") +
+  theme_classic(base_size = 22) +
+  #geom_text(aes(label = round(PercentageFlightC)), position = position_dodge(0.1), vjust = 0.4, hjust= -0.5)
+  scale_y_continuous(breaks = seq(0, 70, by = 10))
+
+LocSel_fig
+
+```
+
+```{r}
+
+Loc_Theme = theme(
+  axis.title.x = element_text(size = 23),
+  axis.text.x = element_text(size = 22),
+  axis.text.y = element_text(size = 22)
+  )
+
+Access_plot <-  Access_plot + Loc_Theme
+Access_plot
+
+LocSel_fig <- LocSel_fig + Loc_Theme
+LocSel_fig
+
+Loc_fig <- ggarrange(Access_plot,LocSel_fig,
+                    labels = c("A", "B"),
+                    ncol = 2, nrow = 1)
+
+Loc_fig 
+
+```
+
+## Waterpoint
+
+```{r, include=FALSE}
+WaterP<- Active_SFS %>%
+  select(., starts_with("Water"))
+
+WaterP <- table(WaterP)
+WaterP <- data.frame(WaterP)
+WaterP$Percent = WaterP$Freq/sum(WaterP$Freq)*100
+```
+
+```{r}
+
+ggplot(WaterP, aes(x=WaterP, y=Percent)) + 
+  geom_bar(stat = "identity") +
+  theme(aspect.ratio = 2/1) +
+  labs(x = "", y = "Percentage (%) \n") +
+  ylim(0, 47) +
+  geom_text(aes(label = round(Percent)), vjust = -0.6) 
+
+ggplot(WaterP, aes(x=WaterP, y=Percent)) + 
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  labs(x = "", y = "Percentage (%)") +
+  ylim(0, 47) +
+  geom_text(aes(label = round(Percent)), vjust = -0.6) 
+
+```
+
+
+## Threats knowledge
+
+### Number of threats mentioned
+
+```{r, include =  FALSE}
+
+colnames(Active_SFS)
+
+Threat <- Active_SFS %>%
+  select(., starts_with("Threat"))
+
+Threat <- as_tibble(Threat)
+
+str(Threat) #Number = continuous variable, needs to be a factor for a histogram
+```
+
+```{r MSAP relevent threats}
+
+ggplot(Threat, aes("Count", Threats_TotalRelaventMentioned)) + geom_boxplot()
+
+hist(Threat$Threats_TotalRelaventMentioned)
+
+boxplot(Threat$Threats_TotalRelaventMentioned, xlab = "Respondents", ylab = "Number of relevent threats")
+
+```
+
+
+Are those that establish SFS for conservation reasons more aware of vulture threats than others? - can compare number of threats mentioned.
+Are those with higher ProvR more aware of threats? i.e. those that do this more seriously?
+
+
+### Threats that respondents are most aware off
+
+```{r, include=FALSE}
+sum(Threat$Threats_AnsweredQuestion)
+  
+ThreatTot <-colSums(Threat)
+ThreatTot <-as_tibble(ThreatTot)
+
+ColNames3 <- colnames(Threat)
+
+ThreatTot <- data.frame(ColNames3, ThreatTot)
+
+ThreatTot <- ThreatTot %>% 
+  rename(Criteria = ColNames3, Respondents = value) %>% arrange(desc(Respondents))
+
+ThreatTot <- as_tibble(ThreatTot)
+
+ThreatTot <- ThreatTot %>%
+  mutate(Percentage = (Respondents / sum(Threat$Threats_AnsweredQuestion)) * 100)
+
+```
+
+```{r, include=FALSE}
+
+Threat_lables <- c("Total relevent mentioned", "Answered question", "Powerlines", "Belief-based use", "Unintentional poisoning total", "Predator control poisoning", "Poisoning", "Intentional poisoning total", "Veterinary drugs", "Habitat loss / degredation", "Poisoning for belief-based use", "Food availibility", "Lead poisoning", "Wind turbines", "Ignorance", "Sentinal poisoning", "Intentional poisoning", "Human disturbance", "Drowning", "Vulture persecution", "Fencing", "Nest site loss", "Vehicle collisions", "None known", "Aircrafts", "Disease", "Stock remedies", "Agro-chemicals", "Car collisions", "Climate change", "Crows", "Institutrianal and Governernance failure", "Egg collectors", "Eggloss (babons, monkeys, crows)", "Human voltaren", " Calcium deficiencies", "Feral dogs", "Drought")
+
+ThreatTot  <- data.frame(Threat_lables , ThreatTot)
+
+ggplot(ThreatTot, aes(x= reorder(Threat_lables, Percentage), y=Percentage)) +
+  geom_bar(stat="identity", width = 0.4) + 
+  coord_flip() +
+  labs(x = "", y = "Percentage (%)") +
+  theme_classic() +
+  geom_text(aes(label = round(Percentage)), position = position_dodge(0.1), vjust = 0.4, hjust= -0.5)
+
+```
+
+
+### MSAP relevent threats
+
+Here I only include threats that are also listed in the Africa Eurasian Multi-species Action Plan, i.e. those that are relevant. These include:
+
+*	SUMPoisonUnintentional
+*	SUMPoisonIntentional
+* LeadPoisoning
+*	VeterinaryDrugs
+*	Powerlines
+*	WindTurbines
+*	FoodAvailibility
+*	Muthi
+*	NestSiteLoss
+*	HabitatLossDegredation
+*	HumanDisturbance
+*	Drowning
+*	VehicleCollicions
+*	ClimateChange
+*	Disease
+*	VulturePersecution (includes hunting and poaching of vultures)
+
+
+```{r MSAP relevent threats plot, include=FALSE}
+
+ThreatTot_Relevent <- slice(ThreatTot, 3:5, 8:10, 12:14, 18:20, 22, 23, 26, 30) 
+ThreatTot_Relevent <-  as_tibble(ThreatTot_Relevent)
+
+Threat_lables2 <- c("Powerlines", "Belief-based use", "Unintentional poisoning total", "Intentional poisoning total", "Veterinary drugs", "Habitat loss / degredation", "Food availibility", "Lead poisoning", "Wind turbines", "Human disturbance", "Drowning", "Vulture persecution", "Nest site loss", "Vehicle collisions", "Disease", "Climate change")
+
+ThreatTot_Relevent  <- data.frame(Threat_lables2 , ThreatTot_Relevent)
+
+```
+
+```{r}
+
+ggplot(ThreatTot_Relevent, aes(x= reorder(Threat_lables, Percentage), y=Percentage)) +
+  geom_bar(stat="identity", width = 0.4) + 
+  coord_flip() +
+  labs(x = "", y = "Percentage (%)") +
+  ylim(0, 80) +
+  theme_classic() +
+  geom_text(aes(label = round(Percentage)), position = position_dodge(0.1), vjust = 0.4, hjust= -0.5)
+
+summary(Threat$Threats_TotalRelaventMentioned)
+
+```
+
+# Motivations 
+
+## Benefits 
+
+```{r}
+
+My_Theme = theme(
+  axis.title.x = element_text(size = 10),
+  axis.text.x = element_text(size = 10),
+  )
+```
+
+```{r, include=FALSE}
+
+Benefits <- Active_SFS %>%
+  select(., starts_with("Benefit"))
+
+Benefits <- as_tibble(Benefits)
+
+colnames(Benefits)
+
+sum(Benefits$Benefits_QuestionAnswered) 
+
+
+str(Benefits) #Number = continuous variable, needs to be a factor for a histogram
+
+Benef_sum <-colSums(Benefits)
+
+Benef_sum <-as_tibble(Benef_sum)
+
+ColNames4 <- colnames(Benefits)
+
+Benef_sum2 <- data.frame(ColNames4, Benef_sum)
+
+Benef_sum <- Benef_sum2 %>% 
+  rename(Criteria = ColNames4, Respondents = value) %>% arrange(desc(Respondents))
+
+Benef_sum <- as_tibble(Benef_sum)
+
+Benef_sum <- slice(Benef_sum, 3, 4, 6, 7, 9, 11, 15, 17)
+
+Benefit_lables <- c("Cleaning service", "Personal enjoyment", "Conservation", "Ecotourism", "None", "Research", "Locating mortalities", "Disease prevention")
+
+```
+
+```{r Benefit plot}
+
+Benef_sum <- Benef_sum %>%
+  mutate(Percentage = (Respondents / sum(Benefits$Benefits_QuestionAnswered)) * 100)
+
+
+```
+
+```{r, include=FALSE}
+
+Benef_sum  <- data.frame(Benefit_lables , Benef_sum)
+
+Benef_sum <- filter(Benef_sum, Percentage < 100, Percentage > 1)
+
+```
+
+```{r}
+
+Benefits_plot <- ggplot(Benef_sum, aes(x= reorder(Benefit_lables, Percentage), y=Percentage)) +
+  geom_bar(stat="identity", width = 0.5) + 
+   ylim(c(0,50)) +
+  coord_flip() +
+  labs(x = "", y = "\n % of managers that \n mentioned each benefit") +
+  theme_classic(base_size = 12) +
+  My_Theme
+
+#+
+  #geom_text(aes(label = round(Percentage)), position = position_dodge(0.1), vjust = 0.4, hjust= -0.5) 
+
+Benefits_plot
+ 
+```
+
+Pest control refers to farmers using SFS as vantage point for jackal hunting.
+
+
+## Disadvantagous 
+
+```{r, include=FALSE}
+
+Disadvantageous <- Active_SFS %>%
+  select(., starts_with("Disadvantageous"))
+
+Disadvantageous <- as_tibble(Disadvantageous)
+
+sum(Disadvantageous$Disadvantageous_QuestionAnswered) 
+
+Disad_sum <-colSums(Disadvantageous)
+
+Disad_sum <-as_tibble(Disad_sum)
+
+ColNames5 <- colnames(Disadvantageous)
+
+Disad_sum2 <- data.frame(ColNames5, Disad_sum)
+
+Disad_sum <- Disad_sum2 %>% 
+  rename(Criteria = ColNames5, Respondents = value) %>% arrange(desc(Respondents))
+
+Disad_sum <- as_tibble(Disad_sum)
+
+DisasAL <- Disad_sum
+
+Disad_sum <- slice(Disad_sum, 2, 3, 4, 6, 7, 11, 12, 15)
+
+Disad_lables <- c("None", "Maintanance", "Problem animals",  "Site security", "Area dirty", "Smell", "Disease concerns", "Carcass sourcing")
+
+Disad_sum  <- data.frame(Disad_lables , Disad_sum)
+
+```
+
+```{r Disad plot}
+
+Disad_sum <- Disad_sum %>%
+  mutate(Percentage = (Respondents / sum(Disadvantageous$Disadvantageous_QuestionAnswered)) * 100) %>% 
+  filter(., Percentage > 1, Percentage < 100)
+
+Disadvantages_plot <-  ggplot(Disad_sum, aes(x= reorder(Disad_lables, Percentage), y=Percentage)) +
+  geom_bar(stat="identity", width = 0.4) + 
+  coord_flip() +
+  ylim(c(0,60)) +
+  labs(x = "", y = "\n % of managers that mentioned \n each disadvantage") +
+  scale_y_continuous(breaks = seq( 0, 60, by = 10)) + 
+  theme_classic(base_size = 12) +
+  My_Theme
+
+  #geom_text(aes(label = round(Percentage)), position = position_dodge(0.1), vjust = 0.4, hjust= -0.5)
+
+Disadvantages_plot
+
+```
+
+```{r}
+
+BD_fig <- ggarrange(Benefits_plot,Disadvantages_plot,
+                    labels = c("A", "B"),
+                    font.label = list(size = 10, color = "black"),
+                    ncol = 2, nrow = 1)
+BD_fig
+
+ggsave("Fig1.tiff", units = "cm", width = 18, height = 6, dpi = 800)
+
+```
+
+# SFS ussage 
+
+## Number of vultures using SFS
+
+```{r, include=FALSE}
+
+NumberVultures <- Active_SFS %>%
+  select(., Number_of_Vultures)
+
+NumberVultures <- as_tibble(NumberVultures)
+
+NumbVult_Base <- filter(NumberVultures, Number_of_Vultures != "NA")
+
+NumbVult_Base <- as_tibble(NumbVult_Base)
+
+ProvCat <- Active_SFS %>%
+  select(., Provisioning_Category, Total_kg_y)
+
+ProvR_Numbers <- data.frame(ProvCat, NumberVultures)
+
+```
+
+```{r Number of V Basic stats}
+
+summary(NumbVult_Base)
+
+```
+
+## Perception of vulture trends 
+
+```{r, include=FALSE}
+
+VultTrend <- table(Active_SFS$VultureVissitation)
+
+VT_class <- c("Constant", "Decreased", "Increased", "Indiscernible", "Decreased", "Increased", "Decreased", "Increased")
+
+VultTrend <- data.frame(VT_class, VultTrend)
+
+VultTrend <- VultTrend %>%
+  group_by(VT_class) %>%
+  summarise(sum_class = sum(Freq))
+
+VultTrend <- VultTrend %>% mutate(Percentage = sum_class/sum(sum_class) *100)
+
+##########################
+
+ggplot(Active_SFS, aes(x= VultureVissitation)) +
+  geom_bar() + 
+  coord_flip() +
+  labs(x = "", y = "Count") +
+  theme_classic() 
+            
+###############################
+```
+
+```{r, eval=FALSE}
+
+ggplot(VultTrend, aes(x= "", y= sum_class, fill = VT_class)) +
+  geom_bar(stat = 'identity') + 
+  theme_minimal() + 
+  coord_polar("y", start = 0) +
+  scale_fill_brewer(palette = "Dark2")
+```
+
+```{r}
+
+ggplot(transform(transform(VultTrend, sum_class=sum_class/sum(sum_class)), labPos =cumsum(sum_class)-sum_class/2),
+       aes(x="", y = sum_class, fill = VT_class)) + 
+  geom_bar(width = 1, stat = "identity") +
+   scale_fill_brewer(palette = "Dark2") +
+  coord_polar(theta = "y") +
+  geom_text(aes(y=labPos, label=scales::percent(sum_class)))
+
+ggplot(VultTrend, aes(x= reorder(VT_class, -Percentage), y=Percentage)) +
+  geom_bar(stat = "identity", width = 0.5) + 
+  labs(x = "", y = "Percentage") +
+  ylim(0, 40) +
+  theme_classic() #+
+  geom_text(aes(label = round(Percentage)), position = position_dodge(0.1), vjust = -1)
+
+# are these perceptions modulated by location (i.e. real trends), or by ProvR. If ProvR is a larger predictor it could mean two things: 1) Vultures are increasing due to SFS 2)Percieved increase solely due to increased drawing power.
+
+```
+
+
+# Context in which SFS function 
+
+## Where is food sourced from 
+
+```{r, include=FALSE}
+
+FOrigin <- Active_SFS %>%
+  select(., starts_with("FoodOrigin"))
+
+FOrigin <- as_tibble(FOrigin)
+
+sum(FOrigin$FoodOrigin_QuestionAnswered) 
+
+FOrigin_sum <-colSums(FOrigin)
+
+FOrigin_sum <-as_tibble(FOrigin_sum)
+
+ColNames5 <- colnames(FOrigin)
+
+FOrigin_sum <- data.frame(ColNames5, FOrigin_sum)
+
+FOrigin_sum <- FOrigin_sum %>% 
+  rename(Criteria = ColNames5, Respondents = value) %>% arrange(desc(Respondents))
+
+FOrigin_sum <- as_tibble(FOrigin_sum)
+
+FOrigin_sum2 <- slice(FOrigin_sum, 3, 5, 6)
+
+FOrigin_labels2 <- c("Own property only","Own and other properties", "Other properties only")
+
+FOrigin_sum2 <- data.frame(FOrigin_labels2, FOrigin_sum2)
+
+```
+
+```{r Food Origin plot}
+
+FOrigin_sum2 <- FOrigin_sum2 %>% 
+  mutate(Percentage = (Respondents/sum(Active_SFS$FoodOrigin_QuestionAnswered))*100)
+
+O_A_Theme = theme(
+  axis.title.x = element_text(size = 34),
+  axis.text.x = element_text(size = 24),
+  axis.text.y = element_text(size = 34)
+  )
+
+Origin_pie <- ggplot(FOrigin_sum2, aes(x= "", y=Respondents, fill = FOrigin_labels2)) +
+  geom_bar(stat="identity", width = 1) + 
+  coord_polar("y", start=0) + 
+  geom_text(aes(label = paste0(round(Percentage), "%")), position = position_stack(vjust = 0.5), size = 12) +
+  theme_void(base_size =  26) + 
+  theme(legend.position = "bottom",   legend.direction = "vertical", legend.text = element_text(size = 24),
+    legend.title = element_text(size = 24, face = "bold"),) +
+  scale_fill_brewer(name = "Origin of carcasses")
+
+Origin_pie
+
+O_pie_1 <- ggarrange(Origin_pie,
+                    labels = c("A"),
+                    ncol = 1, nrow = 1)
+
+O_pie_1
+    
+```
+
+```{r}
+
+FOrigin_sum <- slice(FOrigin_sum, 4, 7, 9, 10, 13)
+
+FOrigin_labels <- c("Local farmers", "Abatoir / Butchery", "Veternarian / SPCA", "Confiscated animlas", "Roadkill")
+
+FOrigin_sum <- data.frame(FOrigin_labels, FOrigin_sum)
+
+FOrigin_sum <- FOrigin_sum %>% 
+  mutate(Percentage = Respondents/(sum(Active_SFS$FoodOrigin_OtherProperties_only) + (sum(Active_SFS$FoodOrigin_OwnANDOtherProperties)))*100)
+
+O_B_Theme = theme(
+  axis.title.x = element_text(size = 22),
+  axis.text.x = element_text(size = 20),
+  axis.text.y = element_text(size = 22)
+  )
+
+Origin_B <- ggplot(FOrigin_sum, aes(x= reorder(FOrigin_labels, Percentage), y=Percentage)) +
+  geom_bar(stat="identity", width = 0.4) + 
+  coord_flip() +
+   ylim(c(0,90)) +
+  labs(x = "", y = "\n Percentage (%) of SFS reporting \n each carcass origin catagory") +
+  theme_classic() +
+  scale_y_continuous(breaks = seq( 0, 90, by = 10)) + 
+  O_B_Theme
+
+Origin_B
+
+O_bar_1 <- ggarrange(Origin_B,
+                    labels = c("B"),
+                    ncol = 1, nrow = 1)
+
+O_bar_1
+
+```
+
+```{r}
+
+O_Theme = theme(
+  axis.title.x = element_text(size = 22),
+  axis.text.x = element_text(size = 18),
+  )
+
+BD_fig <- ggarrange(Benefits_plot,Disadvantages_plot,
+                    labels = c("A", "B"),
+                    ncol = 2, nrow = 1)
+BD_fig
+
+```
+
+
+## Main activities on property 
+
+```{r, include=FALSE}
+
+MActiv <- Active_SFS %>%
+  select(., starts_with("MainActiv"))
+
+MActiv <- as_tibble(MActiv)
+
+sum(MActiv$MainActiv_QuestionAnswered)
+
+MActiv_sum <-colSums(MActiv)
+
+MActiv_sum <-as_tibble(MActiv_sum)
+
+ColNames6 <- colnames(MActiv)
+
+MActiv_sum <- data.frame(ColNames6, MActiv_sum)
+
+MActiv_sum <- MActiv_sum %>% 
+  rename(Criteria = ColNames6, Respondents = value) %>% arrange(desc(Respondents))
+
+MActiv_sum <- as_tibble(MActiv_sum)
+
+MActiv_sum <- MActiv_sum %>%
+  mutate(Percentage = (Respondents / sum(MActiv$MainActiv_QuestionAnswered)) * 100)
+
+MActiv_sum <- filter(MActiv_sum, Percentage < 100, Percentage > 0)
+
+MActiv_sum <- slice(MActiv_sum, 1, 3, 4, 5, 7, 8, 10, 13, 15, 16)
+
+MActiv_label <- c("Livestock farming", "Tourism and hospitality", "Hunting", "Game breeding", "Crop farming", "Conservation area", "Residential / Private estate", "Abattoir / Butchery", "Forestry", "Wildlife rehabilitation and education")
+
+MActiv_sum <- data.frame(MActiv_label, MActiv_sum)
+
+```
+
+```{r Income generating activities}
+
+Income_Theme = theme(
+  axis.title.x = element_text(size = 20),
+  axis.text.x = element_text(size = 18),
+  )
+
+ggplot(MActiv_sum, aes(x= reorder(MActiv_label, Percentage), y=Percentage)) +
+  geom_bar(stat="identity", width = 0.4) + 
+  coord_flip() +
+   ylim(0,55) +
+    theme_classic(base_size = 24) +
+  labs(x = "", y = "\n % of managers reporting each \n  income-generating activity") +
+  scale_y_continuous() + 
+  scale_y_continuous(breaks = seq(0, 55, by = 10)) +
+  Income_Theme
+
+```
+
+## Viewing hide present 
+
+```{r}
+ViewingHide <- Active_SFS %>% 
+  select(., starts_with("ViewingHide"))
+
+table(ViewingHide)
+
+```
+
+```{r, eval= FALSE, include=FALSE}
+
+#Livestock
+length(which(Active_SFS$MainActiv_LivestockfarmSUM == "1")) # 55
+length(which(Active_SFS$MainActiv_LivestockfarmSUM == "1" & Active_SFS$MainActiv_Hunting == "0" )) #52
+length(which(Active_SFS$MainActiv_LivestockfarmSUM == "1" & Active_SFS$MainActiv_Hunting == "0" & Active_SFS$MainActiv_GameBreeding == "0")) #49
+length(which(Active_SFS$MainActiv_LivestockfarmSUM == "1" & Active_SFS$MainActiv_Hunting == "0" & Active_SFS$MainActiv_GameBreeding == "0" & Active_SFS$MainActiv_TourismHospitality == "0")) #46
+
+length(which(Active_SFS$MainActiv_LivestockfarmSUM == "1" & Active_SFS$MainActiv_GameBreeding == "0" )) #51
+
+#Hunting
+length(which(Active_SFS$MainActiv_Hunting == "1")) # 22
+length(which(Active_SFS$MainActiv_Hunting == "1" & Active_SFS$MainActiv_LivestockfarmSUM  == "0" )) #19
+length(which(Active_SFS$MainActiv_Hunting == "1" & Active_SFS$MainActiv_LivestockfarmSUM  == "0" & Active_SFS$MainActiv_GameBreeding == "0")) #7
+length(which(Active_SFS$MainActiv_Hunting == "1" & Active_SFS$MainActiv_LivestockfarmSUM  == "0" & Active_SFS$MainActiv_GameBreeding == "0" & Active_SFS$MainActiv_TourismHospitality == "0")) #4
+
+length(which(Active_SFS$MainActiv_Hunting == "1" & Active_SFS$MainActiv_TourismHospitality  == "0" ))#14
+length(which(Active_SFS$MainActiv_Hunting == "1" & Active_SFS$MainActiv_GameBreeding  == "0" )) #9
+
+
+#Game breeding 
+
+length(which(Active_SFS$MainActiv_GameBreeding == "1")) #21
+length(which(Active_SFS$MainActiv_GameBreeding == "1" & Active_SFS$MainActiv_Hunting  == "0" )) #8
+length(which(Active_SFS$MainActiv_GameBreeding == "1" & Active_SFS$MainActiv_LivestockfarmSUM == "0" )) #17
+length(which(Active_SFS$MainActiv_TourismHospitality == "1" & Active_SFS$MainActiv_Hunting == "0" & Active_SFS$MainActiv_LivestockfarmSUM == "0" & Active_SFS$MainActiv_GameBreeding == "0")) #16
+
+#Tourism Hospitality
+
+length(which(Active_SFS$MainActiv_TourismHospitality == "1")) #28
+length(which(Active_SFS$MainActiv_TourismHospitality == "1" & Active_SFS$MainActiv_Hunting == "0")) #20
+length(which(Active_SFS$MainActiv_TourismHospitality == "1" & Active_SFS$MainActiv_LivestockfarmSUM == "0")) #24
+length(which(Active_SFS$MainActiv_TourismHospitality == "1" & Active_SFS$MainActiv_GameBreeding == "0")) #22
+length(which(Active_SFS$MainActiv_TourismHospitality == "1" & Active_SFS$MainActiv_Hunting == "0" & Active_SFS$MainActiv_LivestockfarmSUM == "0" & Active_SFS$MainActiv_GameBreeding == "0")) #16
+
+```
+

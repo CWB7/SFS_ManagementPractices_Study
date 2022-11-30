@@ -1,0 +1,168 @@
+---
+title: "VultUsage vs ProvR - Linear Regression"
+author: "Christiaan W. Brink"
+date: "25 October 2019"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Supplementary feeding site feeding rate and vulture vissitation
+
+This document shows the analysis associated with the paper titled "Perceptions of vulture supplementary feeding site managers and potential hidden risks to avian scavengers", published in Conservation Science and Practice in 2020. The analysis explores data from a questionnaire survey with vulture supplementary feeding site (SFS) managers to determine the extent of problematic management practices that may endanger vultures. It is advisable to read the results of the paper to give context to the code provided below.
+
+The raw data associated with the analysis can unfortunately not be shared at this time.
+
+This code fits a simple regression line to assess the relationship between feeding rate and the reported number of vultures visiting vulture feeding sites in South Africa. 
+
+```{r, echo=FALSE}
+rm(list=ls())
+
+library (tidyverse)
+library(ggplot2)
+library (dplyr)
+library(readr)
+
+Chpt1B_Data <- read_delim("VRResponses_FINAL_Rworksheet_20191021_CheckedRefined_ActiveSiteCatAdjusted.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+
+Raw_Data <- as_tibble(Chpt1B_Data)
+
+
+Data <- Raw_Data %>%
+  select(., -Number, -Date_Interviewed, -Method, -Time_Start,
+               -Time_End, -Language_Survey, -Name_Respondent)%>%
+  as_tibble(.)
+
+Data <- as_tibble(Data)
+```
+
+```{r Subset to only Active}
+#Need to subset only active SFS in SA - questions such as best practices are only relevent to currely active SFS.
+
+Active_SFS <- Data %>%
+  filter(., Status_Category == "Active", Country == "South Africa")
+
+
+# SFS ussage 
+## Number of vultures using SFS
+```
+
+```{r, include=FALSE}
+
+NumberVultures <- Active_SFS %>%
+  select(., Number_of_Vultures)
+
+NumberVultures <- as_tibble(NumberVultures)
+
+NumbVult_Base <- filter(NumberVultures, Number_of_Vultures != "NA")
+
+NumbVult_Base <- as_tibble(NumbVult_Base)
+
+ProvCat <- Active_SFS %>%
+  select(., Provisioning_Category, Total_kg_y)
+
+ProvR_Numbers <- data.frame(ProvCat, NumberVultures)
+
+```
+
+```{r Number of V Basic stats}
+
+summary(NumbVult_Base)
+
+```
+
+```{r}
+
+### removed outlier above 500 vultures:
+
+ProvR_Numbers <- ProvR_Numbers %>%
+  filter(., Provisioning_Category != "NA") %>%
+  filter(., Provisioning_Category != "Unknown") %>%
+  filter(., Number_of_Vultures != "NA") %>%
+  filter(., Number_of_Vultures < 400, Number_of_Vultures > 0)
+
+hist(ProvR_Numbers$Number_of_Vultures)
+  
+Test <- ProvR_Numbers$Provisioning_Category
+table(Test)
+
+# Number of SFS in each catagory that provided both ProvR and vulture numbers
+
+```
+
+```{r, include=FALSE}
+NumberV_log <- log(ProvR_Numbers$Number_of_Vultures)
+NumberV_log <- as_tibble(NumberV_log)
+
+```
+
+```{r}
+
+ggplot(ProvR_Numbers, aes(x = Number_of_Vultures)) + geom_histogram(binwidth = 20)
+
+ggplot(NumberV_log, aes(x = value)) + geom_histogram(binwidth = 1)  # looks to be Normally distributed
+
+ggplot(ProvR_Numbers, aes(x = reorder(Provisioning_Category, Total_kg_y), y = Number_of_Vultures)) + 
+  geom_boxplot() 
+
+ggplot(ProvR_Numbers, aes(x = Total_kg_y, y = Number_of_Vultures)) +
+  geom_point() +theme_classic() + 
+  geom_smooth(method = 'lm', formula = y~x)
+
+#logged distribution
+ggplot(ProvR_Numbers, aes(x = Total_kg_y, y = log(Number_of_Vultures))) + 
+  geom_point() +
+  theme_classic() +
+  geom_smooth(method = 'lm', formula = y~x)
+
+
+ggplot(ProvR_Numbers, aes(x = Number_of_Vultures, y = log(Total_kg_y))) + 
+  geom_point() +
+  theme_classic() +
+  geom_smooth(method = 'lm', formula = y~x)
+
+```
+
+### Strength of the relationship
+
+#### Correlation Coefficient
+
+```{r}
+Correlation.coefficient = round(cor(ProvR_Numbers$Total_kg_y,
+                                    ProvR_Numbers$Number_of_Vultures), 2)
+# r = 0.35
+Correlation.coefficient=round(cor(ProvR_Numbers$Total_kg_y,
+                                  log(ProvR_Numbers$Number_of_Vultures)), 2)
+# r = 0.28
+Correlation.coefficient
+#There is a weaker positive ralationship when vulture numbers are logged.
+
+# RATHER USE:
+
+cor.test(ProvR_Numbers$Total_kg_y, ProvR_Numbers$Number_of_Vultures) #Testing correlation coefficient
+# 0.3438305 t = 3.5311, df = 93, p-value = 0.000646 95 percent confidence interval: 0.1528817 0.5100301 sample estimates: cor  0.3438305 
+cor.test(ProvR_Numbers$Total_kg_y, log(ProvR_Numbers$Number_of_Vultures))
+#Pearson's product-moment correlation; t = 2.8328, df = 93, p-value = 0.005657 alternative hypothesis: true correlation is not equal to 0 95 percent confidence interval: 0.0851350 0.4574031   cor  0.2818421 
+
+lm_fit <- lm(Number_of_Vultures ~ Total_kg_y, data = ProvR_Numbers)
+
+summary(lm_fit)
+par(mfrow = c(2, 2))
+plot(lm_fit)
+
+```
+
+Plot
+
+```{r}
+
+## logged distribution 
+
+lm_fit_logged <- lm(log(Number_of_Vultures) ~ Total_kg_y, data = ProvR_Numbers)
+summary(lm_fit_logged)
+par(mfrow = c(2, 2))
+plot(lm_fit_logged)
+```
